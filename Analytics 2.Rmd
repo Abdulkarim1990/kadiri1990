@@ -1,0 +1,191 @@
+---
+title: "Analytics 2"
+author: "Abdul-Karim Kadiri"
+date: "2022-11-06"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Load the SLID data from the carData package and attach the data frame to the search path. Describe the SLID data.
+```{r}
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+#To load the SLID data, we must first install the carData package.
+install.packages("carData")
+
+install.packages("tidyverse")
+install.packages("rstatix")
+install.packages("glm2")
+library(carData)
+library(dplyr)
+library(ggpubr)
+library(rstatix)
+library(tidyverse)
+library(AICcmodavg)
+library(glm2)
+
+names(SLID)
+head(SLID)
+attach(SLID)
+#We describe the slide data using summary statistics for the continuous variables and we run frequency for the categorical variables
+summary(wages)
+summary(education)
+summary(age)
+summary(sex)
+summary(language)
+
+
+
+table1::table1(~wages + education + age + sex + language, data = SLID)
+```
+
+2. Produce appropriate plots to examine the bivariate relationships of wages with the other variables in the data set. State the variables that appear to be correlated with wages.
+
+```{r}
+#We determine whether the continuous variables are normally distributed. We will use histogram and Shapiro test. The null hypothesis states that the population is normally distributed i.e if the p-value is greater than 0.05, then the null hypothesis is accepted.
+hist(wages)
+
+shapiro.test(wages)
+
+
+
+
+# to determine the relationship between wage and education, we 
+
+ggscatter(SLID, x = "wages", y = "education", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "kendall",
+          xlab = "Hourly wage rate (in dollars)", ylab = "Education (years)")
+correlation1<- cor.test(wages, education, method = "kendall")# we will use Kendall because wage is not normally distributed from the Shapiro test
+correlation1
+#We noticed a significant positive correlation between wages and years of education. Wage increases with years of education
+#The scatter plots shows the relationship between hourly wages (in dollars) and formal education (in years). The line in the plot shows the mean value of wages for each level of education and represents (in one sense) the regression of wages on education. Although there are many observations in this scatter plot, few individuals in the sample have education below, say, 5 years, and so the mean wages at low levels of education cannot be precisely estimated from the sample, despite its large overall size.  
+hist(education)
+
+# to determine the relationship between wage and age, we 
+
+ggscatter(SLID, x = "wages", y = "age", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "kendall",
+          xlab = "Hourly wage rate (in dollars)", ylab = "Age")
+correlation3<- cor.test(wages, education, method = "kendall")# we will use Kendall because wage is not normally distributed from the Shapiro test
+correlation3
+ #We noticed a significant positive correlation between wages and age. Wage increases with age.
+#The scatter plots shows the relationship between hourly wages (in dollars) and age.
+
+
+
+#Box plot between wages and sex. The box plot will tell us whether there is a relationship between sex and wage. Are male workers earning higher than female?
+ggboxplot(SLID, x = "sex", y = "wages", 
+          color = "sex", palette = c("#00AFBB", "#E7B800"),
+          ylab = "Hourly wage rate (in dollars)", xlab = "Sex of Employees")
+# The box plot revealed that male workers earn slightly more than female workers.
+
+#testing the relationship between wage and sex. Since wage is not normally distributed, we will use wilcoxon rank sum test
+wilco1 <- wilcox.test(wages~ sex, data = SLID)
+wilco1# since our p-value is less than 0.05, we conclude that the test is significant. We therefore reject the null hypothesis that the hourly wage rate is the same for male and female employees.
+
+#computing summary statistics between wages and languages
+
+group_by(SLID, language) %>%
+  summarise(
+    count = n(),
+    mean = mean(wages, na.rm = TRUE),
+    sd = sd(wages, na.rm = TRUE),
+    median = median(wages, na.rm = TRUE),
+    IQR = IQR(wages, na.rm = TRUE)
+  )
+
+#Box plot between wages and languages
+
+ggboxplot(SLID, x = "language", y = "wages",
+          color = "language", palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+          order = c("English", "French", "Other"),
+          ylab = "Hourly wage rate (in dollars)", xlab = "Language")
+
+#To determine the relationship between wages and languages, we will use kruskal-wallis test. This is because languages has more than two levels and the wages is not normally distributed. 
+
+kurs1<- kruskal.test(wages ~ language, data = SLID)
+kurs1
+#The kruskal Wallis test generated a p-value of 0.427 which is greater than the alpha value of 0.05. We fail to reject the null hypothesis and conclude that there are no difference between the wages of the different language speakers.
+
+```
+
+3. Set up the following linear models :
+(i) A model that contains all the variables with wages as the response variable
+(ii) A model that excludes the intercept with wages as the response
+(iii) A model that excludes the term age with wages as the response
+Select a model based on:
+(a) the coefficient of determination
+(b) AIC
+```{r}
+#Setting up the linear models
+#(i) A model that contains all the variables with wages as the response variable
+
+model1 <- lm(wages ~ age + education + sex + language, data = SLID)
+summary (model1)
+
+#(ii) A model that excludes the intercept with wages as the response 
+
+model2 <- lm(wages ~ 0+ age + education + sex + language, data = SLID)
+summary (model2)
+
+#(iii) A model that excludes the term age with wages as the response
+
+model3 <- lm(wages ~ education + sex + language, data = SLID)
+summary (model3)
+
+# Select the model based on:
+#(a) the coefficient of determination
+#The coefficient of determination Rsquare of the three models are as follows;
+#Model1 - R-squared = 0.2973
+#Model2 - R-squared = 0.8566
+#Model3 - R-squared = 0.1459
+#comparing the coefficient of determinations, the best model is model2
+
+#(b) AIC
+
+model_determ <- list(model1, model2, model3)
+model.names <- c("Model 1", "Model 2", "Model 3")
+aictab(model_determ, modnames = model.names)
+#it appears that model 1 and 2 are the best model. They have the lowest AIC value and 50% of the AIC weight. 
+```
+
+4. Set up appropriate glm models using the glm2 package with the following distributions based on the SLID data:
+(i) Binomial
+```{r}
+
+g1 <- glm(sex~wages+education+age+language, data=SLID, family = binomial())
+summary(g1)
+
+```
+
+(ii) Poisson
+```{r}
+g2 <- glm(age~wages+education+sex+language, data=SLID, family = poisson())
+summary(g2)
+```
+
+(iii) Normal
+```{r}
+g3 <- glm(wages~age+education+sex+language, data=SLID, family = gaussian())
+summary(g3)
+```
+
+(iv) Justify the choice of the response variable and interpret the results.
+
+*Binomial* - For binomial, we will use sex as our dependent variable. Recall that binomial takes only two variables and these variables should lie between o<x<1. Sex is nominal and meets this criteria. We are therefore unable to generate a binomial variable using wages. Wage is continuous and not discreet. 
+The estimates (coefficients of the predictors – wages, education, age and language) are now in logits. The coefficient of wages is: 0.0823. This means that a unit change in wages produces approximately a 0.0823 unit change in the log odds (i.e. a 0.0823 unit change in the logit).
+The output produced by glm() includes several additional quantities that require discussion.
+We see a z value for each estimate. The z value is the Wald statistic that tests the hypothesis that the estimate is zero. The null hypothesis is that the estimate has a normal distribution with mean zero and standard deviation of 1. 
+For our example, we have a Null Deviance of about 5527.1 on 3986 degrees of freedom. This value indicates good fit. The AIC is 5264.9.
+
+*Poission* - For poisson, we use age since age is a count variable. Using wage does not generate our model. Wage contain a lot of non-integer data. We therefore cannot compute a GLM model using poisson for wages. All the variables are significant under poisson. Which means that they are able to predict the determinate variable age. The AIC for the Poisson model is: 34534.
+
+*Normal* - Using the normal distribution, we are able to compute the GLM for wage. We see that almost all the variables are significant except Language. The normal distribution generated an AIC of 26370.
