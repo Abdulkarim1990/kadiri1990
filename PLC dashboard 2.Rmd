@@ -1,0 +1,336 @@
+---
+title: "SETP PLC Dashboard"
+author: "GES/T-TEL"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: cerulean
+    orientation: rows
+    vertical_layout: scroll
+runtime: shiny
+---
+
+
+
+```{r global, include=FALSE}
+
+pacman::p_load(rio, here, tidyverse, flexdashboard, flextable, incidence2, epicontacts, DT, janitor, scales, pivottabler, gapminder, gt,plotly, kableExtra,lattice, ggplot2, reshape2, shiny, readxl, formattable, dplyr, lubridate)
+
+clrs <- c ("purple", "gray80", "lightblue", "orange", "gray30", "lightgreen", "lightblue")
+
+
+redata <- function(){
+ read.csv("plc_data.csv") 
+}
+
+plc_data <- redata()
+plc_atten <- read.csv("plc_data_att.csv")
+hbk1_data1 <- read.csv("plc_data_handbk1.csv")
+hbk1_data2 <- read.csv("hbk1_summary.csv")
+hbk2_table <- read.csv("hbk2.csv")
+hbk2 <- read_excel("hbk2.xlsx")
+nts <- read_excel("nts.xlsx")
+attach(plc_data)
+attach(plc_atten)
+attach(hbk1_data1)
+attach(hbk1_data2)
+attach(hbk2_table)
+attach(hbk2)
+attach(nts)
+
+
+session_coded <- factor(session_coded)
+levels (session_coded) <- c('Unit One', 'Unit Two', 'Unit Three', 'Unit Four', 'Unit Five', 'Unit Six', 'Unit Seven', 'Unit Eight', 'Unit Nine', 'Unit Ten' )
+session_coded <- factor(session_coded, levels = rev(levels(session_coded)))
+
+
+
+```
+
+
+
+# Handbook 2
+
+
+## Sidebar {.sidebar}
+Select a region to display:
+
+```{r}
+region_select <- rev(unique(plc_data$Region)) # create vector of regions values to choose from
+
+# create drop-down menu of regions. Selection saved as 'region_select'
+selectInput("region_select", label = "PLC attendance disaggregated by regions:", choices = region_select, selected = region_select[[1]])
+```
+
+A total of 120 PLC sessions had been held since  October 2022 to date (i.e. `r Sys.Date()` ). This gives us an average of 9 sessions per school. Overall an average of 626  teachers (514 male and 112 female) attend PLC sessions each week, representing 82% of the total number of teachers across the SETP schools (751 of whom 514 are male and 112 are female). 
+
+## Row
+-----------------------------------------------------------------------
+
+
+
+
+### % of teachers attending PLC (Overall)
+
+```{r}
+
+totalboxvalue <- plc_data %>%
+  group_by(Name_school) %>%
+  summarise(
+    meanoverall = round(mean(total_attendance, na.rm = TRUE),0),
+    meanoverallpop = round(mean(total_teachers_schoo, na.rm = TRUE),0),
+    box_total_attend = percent(meanoverall/meanoverallpop,0)
+    
+  )
+
+
+
+
+
+valueBox(mean(totalboxvalue$box_total_attend), icon = "fa-pencil", color = "lightgreen")
+
+```
+
+### % female teachers attending PLC
+```{r}
+totalboxvaluefemale <- plc_data %>%
+  group_by(Name_school) %>%
+  summarise(
+    meanfemale = round(mean(female_attendance, na.rm = TRUE),0),
+    meanfemalepop = round(mean(no_female_teachers, na.rm = TRUE),0),
+    box_total_attendfemale = percent(meanfemale/meanfemalepop,0)
+    
+  )
+
+
+valueBox(mean(totalboxvaluefemale$box_total_attendfemale), icon = "fa-person", color = "lightblue")
+
+```
+
+### % of male teachers attending PLC
+```{r}
+totalboxvaluemale <- plc_data %>%
+  group_by(Name_school) %>%
+  summarise(
+    meanmale = round(mean(male_attendance, na.rm = TRUE),0),
+    meanmalepop = round(mean(no_male_teachers, na.rm = TRUE), 0),
+    box_total_attendmale = percent(meanmale/meanmalepop,0)
+    
+  )
+
+
+valueBox(mean(totalboxvaluemale$box_total_attendmale), icon = "fa-solid fa-person", color = "orange")
+
+ 
+    
+```
+
+ 
+
+## Column 1 {data-width=750}
+
+
+### School PLC Data at a Glance
+
+```{r}
+#automate <- data.frame(table_trial$Name_school,table_trial$count,table_trial$unit_mean,table_trial$percent_male_attend, table_trial$percent_female_attend, table_trial$percent_total_attend)
+
+
+
+table_trial <- 
+  plc_data %>% 
+ group_by(Name_school) %>%
+  summarise(
+    count = n(),
+    male_mean = round( mean(male_attendance, na.rm = TRUE),0),
+    unit_mean = round(mean(Units_covered_hbkkk2, na.rm = TRUE),0),
+    female_mean = round(mean(female_attendance, na.rm = TRUE),0),
+    overall_mean = round(mean(total_attendance, na.rm = TRUE),0),
+    male_pop_mean = round(mean(no_male_teachers, na.rm = TRUE),0),
+    female_pop_mean = round( mean(no_female_teachers, na.rm = TRUE),0),
+    overall_pop_mean = round(mean(total_teachers_schoo, na.rm = TRUE),0),
+    percent_male_attend = scales::percent (male_mean/male_pop_mean),
+    percent_female_attend = scales::percent(female_mean/female_pop_mean),
+    percent_total_attend = scales::percent(overall_mean/overall_pop_mean)
+  )
+
+
+vv <- 
+  plot_ly(
+  type = "table",
+  header = list(values = c("School name", "Number of sessions Held","No. of units covered","Male teacher attendance (percent)", "Female teacher attendance (percent)", "Overall attendance (percent)")),
+
+  cells = list(values = rbind(table_trial$Name_school, table_trial$count,table_trial$unit_mean, table_trial$percent_male_attend, table_trial$percent_female_attend, table_trial$percent_total_attend))
+)
+
+
+vv
+
+
+
+
+
+```
+
+
+## Column 2 {data-width=350}
+
+### Overall Attendance by PLC Handbook Unit (Percent)
+
+```{r}
+
+
+ktest <- c(total_attendance/total_teachers_schoo)
+ktkk <- percent(ktest)
+vtest <-round (ktest * 100,0)
+           
+
+
+session_attend <- data.frame(session_coded, ktkk)
+
+
+session_attendhbk2 <- aggregate(ktkk, by=list(session_coded), FUN=mean,na.rm=TRUE)
+
+fig <- plot_ly(
+  x = session_attendhbk2$x , y = session_attendhbk2$Group.1,name = "Overall Attendance (%), PLC Sessions Organised", type = "bar", text = paste0(session_attendhbk2$x) , textposition = 'auto'
+)
+fig
+
+
+
+
+
+
+
+```
+
+
+
+
+### Presence of Senior Management at PLC Sessions (Disaggregated by SETP School)
+```{r}
+leadership_table <- 
+  plc_data %>%
+  group_by(Name_school) %>%
+  summarise(
+    count = n(),
+    head_attendance = sum(headteacher_attendance_2),
+    assistant_attendance_academic = sum(assitant_academic_2),
+    assistant_attendance_admin = sum(assistant_admin_2)
+  )
+ 
+kable(leadership_table, col.names = c("Name of SETP School", "No. of PLC Sessions organised by school", "No. of times head of school attended PLC session", "Number of times assistant head of school (academic) attended PLC session", "Number of times assistant head of school (admin) attended PLC session"),
+      caption = "")%>% 
+  kable_styling() 
+
+
+```
+
+
+# Handbook 1
+
+
+## Row 
+-----------------------------------------------------------------------
+
+### % of teachers attending PLC (Overall)
+```{r}
+hbk1_overall1 <- sum(hbk1_overall_attend)
+hbk1_overall2 <- sum(hbk1_overall_pop)
+hbk1_attend_total <- hbk1_overall1/hbk1_overall2
+hbk1_tt1 <- scales::percent(hbk1_attend_total)
+valueBox("74%", icon = "fa-pencil", color = "lightgreen")
+```
+
+### % female teachers attending PLC
+```{r}
+hbk1_femoverall1 <- sum(hbk1_female_atten)
+hbk1_femoverall2 <- sum(hbk1_female_pop)
+hbk1_femattend_total <- hbk1_femoverall1/hbk1_femoverall2
+hbk1_femtt1 <- scales::percent(hbk1_femattend_total)
+valueBox("72%", icon = "female", color = "lightblue")
+```
+
+### % of male teachers attending PLC
+```{r}
+hbk1_matotal1 <- sum(hbk1_male_attend)
+hbk1_matotal2 <- sum(hbk1_male_pop)
+hbk1_maleoverall <- hbk1_matotal1/hbk1_matotal2
+hbk1_malett1 <- scales::percent(hbk1_maleoverall)
+valueBox("75%", icon = "males", color = "orange")
+```
+
+
+
+
+## Column 1 {data-width=650}
+
+
+### PLC attendance
+#### School PLC Data at a Glance
+```{r}
+
+
+hbk1_trial <- data.frame(nts_school, nts_sessions, nts_units, nts_female, nts_male, nts_overall)
+
+
+
+
+
+
+plot_ly(
+  type = "table",
+  header = list(values = c("School Name", "Number of Sessions Held","Number of Units Covered" ,"Female Teacher Attendance (Percent)", "Male Teacher Attendance (Percent)", "Overall Attendance (Percent)")),
+  align = c("center", "center"),
+    line = list(width = 1, color = "#000000"),
+    fill = list(color = c("#0099f9", "#0099F9")),
+    font = list(size = 14, color = "#FFFFFF"),
+   
+  cells = list(values = rbind(hbk1_trial$nts_school, hbk1_trial$nts_sessions, hbk1_trial$nts_units, hbk1_trial$nts_female, hbk1_trial$nts_male, hbk1_trial$nts_overall))
+)
+
+
+
+
+```
+
+## Column 2 {data-width=350}
+### Overall Attendance by Week
+
+```{r}
+
+hbk1_unit_overall <- data.frame(hbk1_unit, overall_attend_final)
+hbk1_headsoverall_unit <- aggregate(hbk1_unit_overall$overall_attend_final,by=list(hbk1_unit_overall$hbk1_unit),FUN=mean,na.rm=TRUE)
+
+
+
+p<-ggplot(data=hbk1_headsoverall_unit, aes(x=hbk1_headsoverall_unit$x, y=hbk1_headsoverall_unit$Group.1)) +
+  geom_bar(stat="identity", fill="steelblue")  + labs(y = "PLC Handbook 1 Units", x = "Overall Attendance (%)") + 
+  scale_fill_brewer(palette = "Set2") + geom_text(aes(label = round(hbk1_headsoverall_unit$x)))
+
+p + coord_flip()
+
+   
+
+```
+
+
+
+
+### Presence of Senior Management at PLC Sessions (Disaggregated by SETP School)						
+```{r}
+senir <-  data.frame(hbk1_school_name, Head_school_hdbk1, assistant_academic_hbk1, assistant_admin_hdbk1) 
+qw<- summarise(senir, sum_head = sum(Head_school_hdbk1), sum_assitaca = sum(assistant_academic_hbk1), sum_assitadm = sum(assistant_admin_hdbk1, na.rm = TRUE))
+
+head.agg <- aggregate(cbind(senir$Head_school_hdbk1, senir$assistant_academic_hbk1, senir$assistant_admin_hdbk1) ~ senir$hbk1_school_name, data = senir, FUN = function(x) paste0(round(sum(x)/length(x), 2)*100, "%"))
+
+mm <- melt(head.agg, id.vars='senir$hbk1_school_name')
+
+
+kable(head.agg, col.names = c("Name of SETP School", "Head of School", "Assistant Head (Academic)", "Assistant Head (Administration)"),
+      caption = "Percentage of School Leaders Attending PLC Session: Calculated as no. of times school leader attended session/number of sessions organised by school")%>% 
+  kable_styling()
+```
+
+
+
